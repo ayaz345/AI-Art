@@ -84,8 +84,8 @@ class CustomDataset(Dataset):
 
         super().__init__()
 
-        con_img_filepath = root_path + "Content.jpg"
-        sty_img_filepath = root_path + "Style.jpg"
+        con_img_filepath = f"{root_path}Content.jpg"
+        sty_img_filepath = f"{root_path}Style.jpg"
 
         con_img = tfms(io.imread(con_img_filepath))
         sty_img = tfms(io.imread(sty_img_filepath))
@@ -124,7 +124,7 @@ class DataModule(pl.LightningDataModule):
 
     def prepare_data(self):
 
-        tmp_dir = self.root_path + "Tmp"
+        tmp_dir = f"{self.root_path}Tmp"
         os.makedirs(tmp_dir, exist_ok = True)
 
         if self.con_img_url:
@@ -144,13 +144,13 @@ class DataModule(pl.LightningDataModule):
 
     def setup(self, stage: str = None):
 
-        if stage == "fit" or stage == None:
+        if stage == "fit" or stage is None:
 
             self.train = CustomDataset(tfms = self.transforms, root_path = self.root_path)
             print(f"Size of the training dataset: {len(self.train)}")
 
         if stage == "test":
-            print(f"No support for Testing and Validation!")
+            print("No support for Testing and Validation!")
 
 
     def train_dataloader(self):
@@ -297,9 +297,7 @@ class Loss(pl.LightningModule):
 
         b, c, h, w = tensor.size()
         tensor = tensor.view(b * c, h * w)
-        gram_matrix = torch.mm(tensor, tensor.t()).div(b * c * h * w * 2)
-
-        return gram_matrix
+        return torch.mm(tensor, tensor.t()).div(b * c * h * w * 2)
 
 
     @staticmethod
@@ -325,9 +323,7 @@ class Loss(pl.LightningModule):
         """
 
         prediction = self._gram_matrix(prediction)
-        loss = torch.sum(torch.pow(target - prediction, 2))
-
-        return loss
+        return torch.sum(torch.pow(target - prediction, 2))
 
 
     def get_con_loss(self, prediction: torch.tensor):
@@ -338,7 +334,7 @@ class Loss(pl.LightningModule):
         """
 
         loss = [self.get_con_loss_per_layer(getattr(self, f"con_target_{i}"), p) for i, p in enumerate(prediction)]
-        if self.con_layer_wts == None: self.con_layer_wts = [1 / len(loss)] * len(loss)
+        if self.con_layer_wts is None: self.con_layer_wts = [1 / len(loss)] * len(loss)
 
         loss = [wt * l for wt, l in zip(self.con_layer_wts, loss)]
         loss = torch.sum(torch.stack(loss)) * self.con_wt
@@ -354,7 +350,7 @@ class Loss(pl.LightningModule):
         """
 
         loss = [self.get_sty_loss_per_layer(getattr(self, f"sty_target_{i}"), p) for i, p in enumerate(prediction)]
-        if self.sty_layer_wts == None: self.sty_layer_wts = [1 / len(loss)] * len(loss)
+        if self.sty_layer_wts is None: self.sty_layer_wts = [1 / len(loss)] * len(loss)
 
         loss = [wt * l for wt, l in zip(self.sty_layer_wts, loss)]
         loss = torch.sum(torch.stack(loss)) * self.sty_wt
@@ -459,9 +455,9 @@ class StyleTransfer(pl.LightningModule):
 
     def configure_optimizers(self):
 
-        opt = optim.Adam([self.var_img], lr = self.lr, betas = (self.beta_1, self.beta_2))
-
-        return opt
+        return optim.Adam(
+            [self.var_img], lr=self.lr, betas=(self.beta_1, self.beta_2)
+        )
 
 
 ######################################################################################################################################

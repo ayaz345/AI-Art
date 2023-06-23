@@ -169,11 +169,9 @@ class NeuralStyleTransfer:
     @staticmethod
     def _get_var_loss(tensor: torch.Tensor) -> torch.Tensor:
 
-        # method to compute the variational loss of the image
-        loss = (torch.sum(torch.abs(tensor[:, :, :-1] - tensor[:, :, 1:])) +
-                torch.sum(torch.abs(tensor[:, :-1, :] - tensor[:, 1:, :])) )
-
-        return loss
+        return torch.sum(
+            torch.abs(tensor[:, :, :-1] - tensor[:, :, 1:])
+        ) + torch.sum(torch.abs(tensor[:, :-1, :] - tensor[:, 1:, :]))
 
 
     @staticmethod
@@ -189,10 +187,9 @@ class NeuralStyleTransfer:
         Returns: Normalized Gram Matrix of the input tensor
         """
 
-        b, c, h, w  = tensor.size(); tensor_ = tensor.view(b * c, h * w);
-        gram_matrix = torch.mm(tensor_, tensor_.t())
-
-        return gram_matrix
+        b, c, h, w  = tensor.size()
+        tensor_ = tensor.view(b * c, h * w);
+        return torch.mm(tensor_, tensor_.t())
 
 
     def _get_sty_loss(self, pred: torch.Tensor, target: torch.Tensor):
@@ -249,15 +246,16 @@ class NeuralStyleTransfer:
         optimizer = optim.Adam([self.var_image], lr = lr, betas = betas, eps = eps)
 
         for epoch in range(nb_epochs):
-            for iter_ in range(nb_iters):
-
-                self.var_image.data.clamp_(0, 1); optimizer.zero_grad();
+            for _ in range(nb_iters):
+                self.var_image.data.clamp_(0, 1)
+                optimizer.zero_grad();
                 output = self.model(self.var_image);
 
                 con_loss, sty_loss, var_loss = self._get_tot_loss(output)
                 tot_loss = con_loss + sty_loss + var_loss
 
-                tot_loss.backward(); optimizer.step()
+                tot_loss.backward()
+                optimizer.step()
 
             self._print_statistics(epoch, image = self.var_image, tot_loss = tot_loss,
                         con_loss = con_loss, sty_loss = sty_loss, var_loss = var_loss)

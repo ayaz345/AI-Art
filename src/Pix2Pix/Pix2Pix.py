@@ -1,6 +1,9 @@
 
 import numpy as np, pandas as pd,  matplotlib as mpl, matplotlib.pyplot as plt,  os
-import itertools;  from skimage import io as io, transform as tfm;  import warnings
+import itertools
+from skimage import io as io, transform as tfm;  import warnings
+
+import warnings
 
 import torch, torch.nn as nn, torch.nn.functional as F,  torch.optim as optim
 import torchvision,  torchvision.transforms as T,  torchvision.utils as utils
@@ -18,7 +21,7 @@ warnings.filterwarnings("ignore")
 
 
 if torch.cuda.is_available():
-    devices = ['cuda:' + str(x) for x in range(torch.cuda.device_count())]
+    devices = [f'cuda:{str(x)}' for x in range(torch.cuda.device_count())]
     print(f"Number of GPUs available: {len(devices)}")
 else:
     devices = [torch.device('cpu')]; print("GPU isn't available! :(")
@@ -236,8 +239,8 @@ class Helper(object):
 # 2) Image names should be labeled from 1 to len(dataset), o/w will throw an error while sorting the filenames
 
 root_dir = "./Dataset/Vision/Pix2Pix/Facades/"
-trn_path = root_dir + "Trn/"
-val_path = root_dir + "Val/"
+trn_path = f"{root_dir}Trn/"
+val_path = f"{root_dir}Val/"
 
 img_sz = 256
 jitter_sz = int(img_sz * 1.12)
@@ -254,13 +257,17 @@ val_dataset, val_dataloader = helper.get_data(val_path, val_tfms, val_batch_sz, 
 
 
 sample = helper.get_random_sample(trn_dataset)
-plt.subplot(1, 2, 1); helper.show_image(sample['A'])
-plt.subplot(1, 2, 2); helper.show_image(sample['B'])
+plt.subplot(1, 2, 1)
+helper.show_image(sample['A'])
+plt.subplot(1, 2, 2)
+helper.show_image(sample['B'])
 plt.show()
 
 sample = helper.get_random_sample(val_dataset)
-plt.subplot(1, 2, 1); helper.show_image(sample['A'])
-plt.subplot(1, 2, 2); helper.show_image(sample['B'])
+plt.subplot(1, 2, 1)
+helper.show_image(sample['A'])
+plt.subplot(1, 2, 2)
+helper.show_image(sample['B'])
 plt.show()
 
 
@@ -346,7 +353,7 @@ class Generator(nn.Module):
     
     def __init__(self, in_channels: int = 3, out_channels: int = 64, nb_layers: int = 8, apply_dp: bool = True, 
                  add_skip_conn: bool = True, norm_type: str = 'instance'):
-        
+
         """
                             Generator Architecture!
         Encoder:        C64-C128-C256-C512-C512-C512-C512-C512
@@ -363,27 +370,27 @@ class Generator(nn.Module):
             add_skip_conn:  If set to true, skip connections are added b/w Encoder and Decoder
             norm_type:      Type of Normalization layer - InstanceNorm2D or BatchNorm2D
         """
-        
+
         super().__init__()
-        
+
         f = 4
         self.layers = []
-        
+
         unet = UNetBlock(out_channels * 8, out_channels * 8, innermost = True, outermost = False, apply_dp = False,
                          submodule = None, add_skip_conn = add_skip_conn, norm_type = norm_type)
-        
-        for idx in range(nb_layers - 5):
+
+        for _ in range(nb_layers - 5):
             unet = UNetBlock(out_channels * 8, out_channels * 8, innermost = False, outermost = False, apply_dp =
                              apply_dp, submodule = unet, add_skip_conn = add_skip_conn, norm_type = norm_type)
-            
-        for idx in range(0, 3):
+
+        for _ in range(0, 3):
             unet = UNetBlock(out_channels * f, out_channels*2*f, innermost = False, outermost = False, apply_dp =
                              False,    submodule = unet, add_skip_conn = add_skip_conn, norm_type = norm_type)
             f = f // 2
-        
+
         unet = UNetBlock(in_channels * 1, out_channels * 1, innermost = False, outermost = True,  apply_dp = False,
                          submodule = unet, add_skip_conn = add_skip_conn, norm_type = norm_type)
-        
+
         self.net = unet
         
         
@@ -394,7 +401,7 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     
     def __init__(self, in_channels: int, out_channels: int, nb_layers = 3, norm_type: str = 'instance'):
-        
+
         """
                                     Discriminator Architecture!
         C64 - C128 - C256 - C512, where Ck denote a Convolution-InstanceNorm-LeakyReLU layer with k filters
@@ -406,30 +413,30 @@ class Discriminator(nn.Module):
             out_channels:   Number of output channels
             nb_layers:      Number of layers in the 70*70 Patch Discriminator
         """
-        
+
         super().__init__()
-        
+
         in_f  = 1
         out_f = 2
-        bias = norm_type == 'instance' 
+        bias = norm_type == 'instance'
         norm_layer = InstanceNorm if norm_type == "instance" else BatchNorm
-        
+
         conv = Conv(in_channels, out_channels, 4, stride = 2, padding = 1, bias = True)
         layers = [conv, nn.LeakyReLU(0.2, True)]
-        
-        for idx in range(1, nb_layers):
+
+        for _ in range(1, nb_layers):
             conv = Conv(out_channels * in_f, out_channels * out_f, 4, stride = 2, padding = 1, bias = bias)
             layers += [conv, norm_layer(out_channels * out_f), nn.LeakyReLU(0.2, True)]
             in_f   = out_f
             out_f *= 2
-        
+
         out_f = min(2 ** nb_layers, 8)
         conv = Conv(out_channels * in_f, out_channels * out_f, 4, stride = 1, padding = 1, bias = bias)
         layers += [conv, norm_layer(out_channels * out_f), nn.LeakyReLU(0.2, True)]      
-        
+
         conv = Conv(out_channels * out_f, 1, 4, stride = 1, padding = 1, bias = True)
         layers += [conv]
-        
+
         self.net = nn.Sequential(*layers)
         
         
@@ -545,7 +552,7 @@ class Loss:
         
     
     def get_dis_gan_loss(self, dis_pred_real_data, dis_pred_fake_data):
-        
+
         """
         Parameters:
             dis_pred_real_data: Discriminator's prediction on real data
@@ -554,30 +561,26 @@ class Loss:
         
         dis_tar_real_data = torch.ones_like (dis_pred_real_data, requires_grad = False)
         dis_tar_fake_data = torch.zeros_like(dis_pred_fake_data, requires_grad = False)
-        
+
         loss_real_data = self.loss(dis_pred_real_data, dis_tar_real_data)
         loss_fake_data = self.loss(dis_pred_fake_data, dis_tar_fake_data)
-        
-        dis_tot_loss = (loss_real_data + loss_fake_data) * 0.5
-        
-        return dis_tot_loss
+
+        return (loss_real_data + loss_fake_data) * 0.5
     
     
     def get_gen_gan_loss(self, dis_pred_fake_data):
-        
+
         """
         Parameters:
             dis_pred_fake_data: Discriminator's prediction on fake data
         """
         
         gen_tar_fake_data = torch.ones_like(dis_pred_fake_data, requires_grad = False)
-        gen_tot_loss = self.loss(dis_pred_fake_data, gen_tar_fake_data)
-        
-        return gen_tot_loss
+        return self.loss(dis_pred_fake_data, gen_tar_fake_data)
     
     
     def get_gen_rec_loss(self, real_data, recs_data):
-        
+
         """
         Parameters:
             real_data: Real images sampled from the dataloaders
@@ -585,9 +588,7 @@ class Loss:
         """
         
         gen_rec_loss = torch.nn.L1Loss()(real_data, recs_data)
-        gen_tot_loss = gen_rec_loss * self.lambda_
-        
-        return gen_tot_loss
+        return gen_rec_loss * self.lambda_
 
 
 class SaveModel:
@@ -613,12 +614,13 @@ class Pix2Pix:
         self.dis  = dis
         self.gen  = gen
         self.loss = Loss()
-        self.save_dir = root_dir + 'Models/'
-        summary_path = root_dir + 'Tensorboard/'
-        
+        self.save_dir = f'{root_dir}Models/'
+        summary_path = f'{root_dir}Tensorboard/'
+
         if not os.path.exists(self.save_dir): os.makedirs(self.save_dir)
         if not os.path.exists(summary_path ): os.makedirs(summary_path )
-        self.saver = SaveModel(self.save_dir); self.tb = Tensorboard(summary_path)
+        self.saver = SaveModel(self.save_dir)
+        self.tb = Tensorboard(summary_path)
     
     
     def load_state_dict(self, path, train = True):
@@ -728,24 +730,23 @@ class Pix2Pix:
     @torch.no_grad()
     def eval_(self, model_name: str = None):
         
-        _ = self.load_state_dict(self.save_dir + model_name, train = False) 
+        _ = self.load_state_dict(self.save_dir + model_name, train = False)
         list_fake_B = []
         list_real_B = []
         list_real_A = []
-        
-        for idx, data in enumerate(val_dataloader):
-            
+
+        for data in val_dataloader:
             real_A, real_B = data['A'].to(devices[0]), data['B'].to(devices[0])
             list_real_A.append(data['A'])
             list_real_B.append(data['B'])
-            
+
             fake_B = self.gen(real_A).detach()
             list_fake_B.append(fake_B)
-            
+
         fake_B = torch.cat(list_fake_B, axis = 0)
         real_B = torch.cat(list_real_B, axis = 0)
         real_A = torch.cat(list_real_A, axis = 0)
-        
+
         return real_A, real_B, fake_B
 
 
@@ -768,7 +769,7 @@ model = Pix2Pix(root_dir = root_dir, gen = gen, dis = dis)
 if is_train: 
     model.fit(nb_epochs = nb_epochs, model_name = None, epoch_decay = epoch_decay)
 else: 
-    real_A, real_B, fake_B = model.eval_(model_name = "Model_" + str(nb_epochs) + ".pth")
+    real_A, real_B, fake_B = model.eval_(model_name=f"Model_{nb_epochs}.pth")
 
 ######################################################################################################################
 
