@@ -144,13 +144,14 @@ class CustomDataset(Dataset):
             transforms: a list of Transformations (Data augmentation)
         """
 
-        super().__init__(); self.transforms = T.Compose(transforms)
+        super().__init__()
+        self.transforms = T.Compose(transforms)
 
-        file_names_A = sorted(os.listdir(path + 'A/'), key = lambda x: int(x[: -4]))
-        self.file_names_A = [path + 'A/' + file_name for file_name in file_names_A]
+        file_names_A = sorted(os.listdir(f'{path}A/'), key = lambda x: int(x[: -4]))
+        self.file_names_A = [f'{path}A/{file_name}' for file_name in file_names_A]
 
-        file_names_B = sorted(os.listdir(path + 'B/'), key = lambda x: int(x[: -4]))
-        self.file_names_B = [path + 'B/' + file_name for file_name in file_names_B]
+        file_names_B = sorted(os.listdir(f'{path}B/'), key = lambda x: int(x[: -4]))
+        self.file_names_B = [f'{path}B/{file_name}' for file_name in file_names_B]
 
         self.file_names_A = self.file_names_A[:max_sz]
         self.file_names_B = self.file_names_B[:max_sz]
@@ -165,9 +166,7 @@ class CustomDataset(Dataset):
 
         A = io.imread(self.file_names_A[idx])
         B = io.imread(self.file_names_B[idx])
-        sample = self.transforms({'A': A, 'B': B})
-
-        return sample
+        return self.transforms({'A': A, 'B': B})
 
 
 
@@ -198,8 +197,8 @@ class DataModule(pl.LightningDataModule):
         self.url = url
         self.dataset = url.split("/")[-1]
 
-        self.processed_dir  = root_dir + "Processed/"
-        self.compressed_dir = root_dir + "Compressed/"
+        self.processed_dir = f"{root_dir}Processed/"
+        self.compressed_dir = f"{root_dir}Compressed/"
         os.makedirs(self.processed_dir , exist_ok = True)
         os.makedirs(self.compressed_dir, exist_ok = True)
 
@@ -222,19 +221,19 @@ class DataModule(pl.LightningDataModule):
 
             with zipfile.ZipFile(self.compressed_dir + self.dataset, 'r') as zip_ref:
                 zip_ref.extractall(self.processed_dir)
-            print(f"Extraction done!")
+            print("Extraction done!")
 
             # you might need to modify the below code; it's not generic, but works for most of the datasets 
             # listed in that url.
-            
+
             dwnld_dir = self.processed_dir + self.dataset[:-4] + "/"
             for folder in ["testA/", "testB/", "trainA/", "trainB/"]:
 
                 dest_dir = dwnld_dir
                 src_dir  = dwnld_dir + folder
 
-                dest_dir = dest_dir + "Train/" if folder[:-2] != "test" else dest_dir + "Test/"
-                dest_dir = dest_dir + "B/"     if folder[-2]  != "A"    else dest_dir + "A/"
+                dest_dir = f"{dest_dir}Train/" if folder[:-2] != "test" else f"{dest_dir}Test/"
+                dest_dir = f"{dest_dir}B/" if folder[-2]  != "A" else f"{dest_dir}A/"
                 os.makedirs(dest_dir, exist_ok = True)
 
                 orig_files = [src_dir  + file for file in sorted(os.listdir(src_dir))]
@@ -244,7 +243,7 @@ class DataModule(pl.LightningDataModule):
                     shutil.move(orig_file, modf_file)
                 os.rmdir(src_dir)
 
-            print(f"Files moved to appropiate folder!")
+            print("Files moved to appropiate folder!")
 
 
     def setup(self, stage: str = None):
@@ -254,8 +253,8 @@ class DataModule(pl.LightningDataModule):
         """
 
         dwnld_dir = self.processed_dir + self.dataset[:-4]
-        trn_dir = dwnld_dir + "/Train/"
-        tst_dir = dwnld_dir + "/Test/"
+        trn_dir = f"{dwnld_dir}/Train/"
+        tst_dir = f"{dwnld_dir}/Test/"
 
         if stage == 'fit' or stage is None:
 
@@ -303,18 +302,22 @@ datamodule.prepare_data()
 datamodule.setup("fit")
 
 
-print(f"Few random samples from the Training dataset!")
+print("Few random samples from the Training dataset!")
 
 sample = get_random_sample(datamodule.train)
-plt.subplot(1, 2, 1); show_image(sample['A'])
-plt.subplot(1, 2, 2); show_image(sample['B'])
+plt.subplot(1, 2, 1)
+show_image(sample['A'])
+plt.subplot(1, 2, 2)
+show_image(sample['B'])
 plt.show()
 
-print(f"Few random samples from the Validation dataset!")
+print("Few random samples from the Validation dataset!")
 
 sample = get_random_sample(datamodule.valid)
-plt.subplot(1, 2, 1); show_image(sample['A'])
-plt.subplot(1, 2, 2); show_image(sample['B'])
+plt.subplot(1, 2, 1)
+show_image(sample['A'])
+plt.subplot(1, 2, 2)
+show_image(sample['B'])
 plt.show()
 
 
@@ -420,18 +423,18 @@ class Generator(nn.Module):
         """
 
         super().__init__()
-        
+
         f = 4
         self.layers = []
 
         unet = UNetBlock(out_channels * 8, out_channels * 8, innermost = True, outermost = False, apply_dp = False,
                          submodule = None, add_skip_conn = add_skip_conn, norm_type = norm_type)
 
-        for idx in range(nb_layers - 5):
+        for _ in range(nb_layers - 5):
             unet = UNetBlock(out_channels * 8, out_channels * 8, innermost = False, outermost = False, apply_dp =
                              apply_dp, submodule = unet, add_skip_conn = add_skip_conn, norm_type = norm_type)
 
-        for idx in range(0, 3):
+        for _ in range(0, 3):
             unet = UNetBlock(out_channels * f, out_channels*2*f, innermost = False, outermost = False, apply_dp =
                              False,    submodule = unet, add_skip_conn = add_skip_conn, norm_type = norm_type)
             f = f // 2
@@ -464,7 +467,7 @@ class Discriminator(nn.Module):
         """
 
         super().__init__()
-        
+
         in_f  = 1
         out_f = 2
         bias = norm_type == 'instance'
@@ -473,10 +476,11 @@ class Discriminator(nn.Module):
         conv = Conv(in_channels, out_channels, 4, stride = 2, padding = 1, bias = True)
         layers = [conv, nn.LeakyReLU(0.2, True)]
 
-        for idx in range(1, nb_layers):
+        for _ in range(1, nb_layers):
             conv = Conv(out_channels * in_f, out_channels * out_f, 4, stride = 2, padding = 1, bias = bias)
             layers += [conv, norm_layer(out_channels * out_f), nn.LeakyReLU(0.2, True)]
-            in_f = out_f; out_f *= 2
+            in_f = out_f
+            out_f *= 2
 
         out_f = min(2 ** nb_layers, 8)
         conv = Conv(out_channels * in_f, out_channels * out_f, 4, stride = 1, padding = 1, bias = bias)
@@ -574,9 +578,7 @@ class Loss:
         loss_real_data = self.loss(dis_pred_real_data, dis_tar_real_data)
         loss_fake_data = self.loss(dis_pred_fake_data, dis_tar_fake_data)
 
-        dis_tot_loss = (loss_real_data + loss_fake_data) * 0.5
-
-        return dis_tot_loss
+        return (loss_real_data + loss_fake_data) * 0.5
 
 
     def get_gen_gan_loss(self, dis_pred_fake_data):
@@ -587,9 +589,7 @@ class Loss:
         """
 
         gen_tar_fake_data = torch.ones_like(dis_pred_fake_data, requires_grad = False)
-        gen_tot_loss = self.loss(dis_pred_fake_data, gen_tar_fake_data)
-
-        return gen_tot_loss
+        return self.loss(dis_pred_fake_data, gen_tar_fake_data)
 
 
     def get_gen_rec_loss(self, real_data, recs_data):
@@ -601,9 +601,7 @@ class Loss:
         """
 
         gen_rec_loss = torch.nn.L1Loss()(real_data, recs_data)
-        gen_tot_loss = gen_rec_loss * self.lambda_
-
-        return gen_tot_loss
+        return gen_rec_loss * self.lambda_
 
 
     def get_gen_loss(self, dis_pred_fake_data, real_data, fake_data):
@@ -615,9 +613,7 @@ class Loss:
 
         gen_gan_loss = self.get_gen_gan_loss(dis_pred_fake_data  )
         gen_rec_loss = self.get_gen_rec_loss(real_data, fake_data)
-        gen_tot_loss = gen_gan_loss + gen_rec_loss
-
-        return gen_tot_loss
+        return gen_gan_loss + gen_rec_loss
 
 
 
@@ -663,10 +659,7 @@ class Pix2Pix(pl.LightningModule):
 
     def forward(self, real_A):
         
-        # this is different from the training step. You should treat this as the final inference code (final outputs that you are looking for!)
-        fake_B = self.gen(real_A)
-
-        return fake_B
+        return self.gen(real_A)
 
 
     def training_step(self, batch, batch_idx, optimizer_idx):
@@ -716,11 +709,11 @@ class Pix2Pix(pl.LightningModule):
         dict_ = {f'g_{stage}_loss': g_loss, f'd_{stage}_loss': d_loss}
         self.log_dict(dict_, on_step = False, on_epoch = True, prog_bar = True, logger = True)
 
-        for i in range(12):
+        for _ in range(12):
             rand_int = np.random.randint(0, len(real_A))
             tensor = torch.stack([real_A[rand_int], fake_B[rand_int], real_B[rand_int]])
             grid.append((tensor + 1) / 2)
-            
+
         # log the results on tensorboard
         grid = torchvision.utils.make_grid(torch.cat(grid, 0), nrow = 6)
         self.logger.experiment.add_image('Grid', grid, self.current_epoch, dataformats = "CHW")

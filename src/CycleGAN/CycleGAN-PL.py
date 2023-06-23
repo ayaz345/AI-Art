@@ -143,13 +143,14 @@ class CustomDataset(Dataset):
             transforms: a list of Transformations (Data augmentation)
         """
 
-        super().__init__(); self.transforms = T.Compose(transforms)
+        super().__init__()
+        self.transforms = T.Compose(transforms)
 
-        file_names_A = sorted(os.listdir(path + 'A/'), key = lambda x: int(x[: -4]))
-        self.file_names_A = [path + 'A/' + file_name for file_name in file_names_A]
+        file_names_A = sorted(os.listdir(f'{path}A/'), key = lambda x: int(x[: -4]))
+        self.file_names_A = [f'{path}A/{file_name}' for file_name in file_names_A]
 
-        file_names_B = sorted(os.listdir(path + 'B/'), key = lambda x: int(x[: -4]))
-        self.file_names_B = [path + 'B/' + file_name for file_name in file_names_B]
+        file_names_B = sorted(os.listdir(f'{path}B/'), key = lambda x: int(x[: -4]))
+        self.file_names_B = [f'{path}B/{file_name}' for file_name in file_names_B]
 
         self.file_names_A = self.file_names_A[:max_sz]
         self.file_names_B = self.file_names_B[:max_sz]
@@ -163,9 +164,7 @@ class CustomDataset(Dataset):
 
         A = io.imread(self.file_names_A[idx % len(self.file_names_A)])
         B = io.imread(self.file_names_B[idx % len(self.file_names_B)])
-        sample = self.transforms({'A': A, 'B': B})
-
-        return sample
+        return self.transforms({'A': A, 'B': B})
 
 
 
@@ -196,8 +195,8 @@ class DataModule(pl.LightningDataModule):
         self.url = url
         self.dataset = url.split("/")[-1]
 
-        self.processed_dir  = root_dir + "Processed/"
-        self.compressed_dir = root_dir + "Compressed/"
+        self.processed_dir = f"{root_dir}Processed/"
+        self.compressed_dir = f"{root_dir}Compressed/"
         os.makedirs(self.processed_dir , exist_ok = True)
         os.makedirs(self.compressed_dir, exist_ok = True)
 
@@ -220,7 +219,7 @@ class DataModule(pl.LightningDataModule):
 
             with zipfile.ZipFile(self.compressed_dir + self.dataset, 'r') as zip_ref:
                 zip_ref.extractall(self.processed_dir)
-            print(f"Extraction done!")
+            print("Extraction done!")
 
             # you might need to modify the below code; it's not generic, but works for most of the datasets listed in that url.
             dwnld_dir = self.processed_dir + self.dataset[:-4] + "/"
@@ -229,8 +228,8 @@ class DataModule(pl.LightningDataModule):
                 dest_dir = dwnld_dir
                 src_dir  = dwnld_dir + folder
 
-                dest_dir = dest_dir + "Train/" if folder[:-2] != "test" else dest_dir + "Test/"
-                dest_dir = dest_dir + "B/"     if folder[-2]  != "A"    else dest_dir + "A/"
+                dest_dir = f"{dest_dir}Train/" if folder[:-2] != "test" else f"{dest_dir}Test/"
+                dest_dir = f"{dest_dir}B/" if folder[-2]  != "A" else f"{dest_dir}A/"
                 os.makedirs(dest_dir, exist_ok = True)
 
                 orig_files = [src_dir  + file for file in os.listdir(src_dir)]
@@ -240,7 +239,7 @@ class DataModule(pl.LightningDataModule):
                     shutil.move(orig_file, modf_file)
                 os.rmdir(src_dir)
 
-            print(f"Files moved to appropiate folder!")
+            print("Files moved to appropiate folder!")
 
 
     def setup(self, stage: str = None):
@@ -250,8 +249,8 @@ class DataModule(pl.LightningDataModule):
         """
 
         dwnld_dir = self.processed_dir + self.dataset[:-4]
-        trn_dir = dwnld_dir + "/Train/"
-        tst_dir = dwnld_dir + "/Test/"
+        trn_dir = f"{dwnld_dir}/Train/"
+        tst_dir = f"{dwnld_dir}/Test/"
 
         if stage == 'fit' or stage is None:
 
@@ -297,18 +296,22 @@ datamodule.prepare_data()
 datamodule.setup("fit")
 
 
-print(f"Few random samples from the Training dataset!")
+print("Few random samples from the Training dataset!")
 
 sample = get_random_sample(datamodule.train)
-plt.subplot(1, 2, 1); show_image(sample['A'])
-plt.subplot(1, 2, 2); show_image(sample['B'])
+plt.subplot(1, 2, 1)
+show_image(sample['A'])
+plt.subplot(1, 2, 2)
+show_image(sample['B'])
 plt.show()
 
-print(f"Few random samples from the Validation dataset!")
+print("Few random samples from the Validation dataset!")
 
 sample = get_random_sample(datamodule.valid)
-plt.subplot(1, 2, 1); show_image(sample['A'])
-plt.subplot(1, 2, 2); show_image(sample['B'])
+plt.subplot(1, 2, 1)
+show_image(sample['A'])
+plt.subplot(1, 2, 2)
+show_image(sample['B'])
 plt.show()
 
 
@@ -379,16 +382,16 @@ class Generator(nn.Module):
         conv = nn.Conv2d(in_channels = in_channels, out_channels = out_channels, kernel_size = 7, stride = 1)
         self.layers = [nn.ReflectionPad2d(3), conv, nn.InstanceNorm2d(out_channels), nn.ReLU(True)]
 
-        for i in range(nb_downsampling):
+        for _ in range(nb_downsampling):
             conv = nn.Conv2d(out_channels * f, out_channels * 2 * f, kernel_size = 3, stride = 2, padding = 1)
             self.layers += [conv, nn.InstanceNorm2d(out_channels * 2 * f), nn.ReLU(True)]
             f *= 2
 
-        for i in range(nb_resblks):
+        for _ in range(nb_resblks):
             res_blk = ResBlock(in_channels = out_channels * f, apply_dp = apply_dp)
             self.layers += [res_blk]
 
-        for i in range(nb_downsampling):
+        for _ in range(nb_downsampling):
             conv = nn.ConvTranspose2d(out_channels * f, out_channels * (f//2), 3, 2, padding = 1, output_padding = 1)
             self.layers += [conv, nn.InstanceNorm2d(out_channels * (f//2)), nn.ReLU(True)]
             f = f // 2
@@ -426,7 +429,7 @@ class Discriminator(nn.Module):
         conv = nn.Conv2d(in_channels, out_channels, kernel_size = 4, stride = 2, padding = 1)
         self.layers = [conv, nn.LeakyReLU(0.2, True)]
 
-        for idx in range(1, nb_layers):
+        for _ in range(1, nb_layers):
             conv = nn.Conv2d(out_channels * in_f, out_channels * out_f, kernel_size = 4, stride = 2, padding = 1)
             self.layers += [conv, nn.InstanceNorm2d(out_channels * out_f), nn.LeakyReLU(0.2, True)]
             in_f   = out_f
@@ -524,19 +527,18 @@ class ImagePool:
         for image in images:
             image = torch.unsqueeze(image, 0)
 
-            if  self.nb_images < self.pool_sz:
+            if self.nb_images < self.pool_sz:
                 self.image_pool.append (image)
                 images_to_return.append(image)
                 self.nb_images += 1
-            else:
-                if np.random.uniform(0, 1) > 0.5:
+            elif np.random.uniform(0, 1) > 0.5:
 
-                    rand_int = np.random.randint(0, self.pool_sz)
-                    temp_img = self.image_pool[rand_int].clone()
-                    self.image_pool[rand_int] = image
-                    images_to_return.append(temp_img)
-                else:
-                    images_to_return.append(image)
+                rand_int = np.random.randint(0, self.pool_sz)
+                temp_img = self.image_pool[rand_int].clone()
+                self.image_pool[rand_int] = image
+                images_to_return.append(temp_img)
+            else:
+                images_to_return.append(image)
 
         return torch.cat(images_to_return, 0)
 
@@ -574,9 +576,7 @@ class Loss:
         loss_real_data = self.loss(dis_pred_real_data, dis_tar_real_data)
         loss_fake_data = self.loss(dis_pred_fake_data, dis_tar_fake_data)
 
-        dis_tot_loss = (loss_real_data + loss_fake_data) * 0.5
-
-        return dis_tot_loss
+        return (loss_real_data + loss_fake_data) * 0.5
 
 
     def get_gen_gan_loss(self, dis_pred_fake_data):
@@ -587,9 +587,7 @@ class Loss:
         """
 
         gen_tar_fake_data = torch.ones_like(dis_pred_fake_data, requires_grad = False)
-        gen_tot_loss = self.loss(dis_pred_fake_data, gen_tar_fake_data)
-
-        return gen_tot_loss
+        return self.loss(dis_pred_fake_data, gen_tar_fake_data)
 
 
     def get_gen_cyc_loss(self, real_data, cyc_data):
@@ -602,9 +600,7 @@ class Loss:
         """
 
         gen_cyc_loss = torch.nn.L1Loss()(real_data, cyc_data)
-        gen_tot_loss = gen_cyc_loss * self.lambda_
-
-        return gen_tot_loss
+        return gen_cyc_loss * self.lambda_
 
 
     def get_gen_idt_loss(self, real_data, idt_data):
@@ -616,9 +612,7 @@ class Loss:
         """
 
         gen_idt_loss = torch.nn.L1Loss()(real_data, idt_data)
-        gen_tot_loss = gen_idt_loss * self.lambda_ * 0.5
-
-        return gen_tot_loss
+        return gen_idt_loss * self.lambda_ * 0.5
 
 
     def get_gen_loss(self, real_A, real_B, cyc_A, cyc_B, idt_A, idt_B, d_A_pred_fake_data,
@@ -807,15 +801,15 @@ class CycleGAN(pl.LightningModule):
 
         grid_A = []
         grid_B = []
-        
+
         real_A, real_B = batch['A'], batch['B']
-        
+
         fake_B, fake_A = self(real_A, real_B)
         cyc_A , idt_A , cyc_B, idt_B = self.forward_gen(real_A, real_B, fake_A, fake_B)
-        
+
         d_A_pred_real_data, d_A_pred_fake_data = self.forward_dis(self.d_A, real_A, fake_A)
         d_B_pred_real_data, d_B_pred_fake_data = self.forward_dis(self.d_B, real_B, fake_B)
-        
+
         # G_A2B loss, G_B2A loss, G loss
         g_A2B_loss, g_B2A_loss, g_tot_loss = self.loss.get_gen_loss(real_A, real_B, cyc_A, cyc_B, idt_A, idt_B, 
                                                                     d_A_pred_fake_data, d_B_pred_fake_data)
@@ -828,14 +822,14 @@ class CycleGAN(pl.LightningModule):
                  f'd_A_{stage}_loss'  : d_A_loss  , f'd_B_{stage}_loss'  : d_B_loss}
         self.log_dict(dict_, on_step = False, on_epoch = True, prog_bar = True, logger = True)
 
-        for i in range(12):
+        for _ in range(12):
             rand_int = np.random.randint(0, len(real_A))
             tensor = torch.stack([real_A[rand_int], fake_B[rand_int], cyc_A[rand_int],
                                   real_B[rand_int], fake_A[rand_int], cyc_B[rand_int]])
             tensor = (tensor + 1) / 2
             grid_A.append(tensor[:3])
             grid_B.append(tensor[3:])
-        
+
         # log the results on tensorboard
         grid_A = torchvision.utils.make_grid(torch.cat(grid_A, 0), nrow = 6)
         grid_B = torchvision.utils.make_grid(torch.cat(grid_B, 0), nrow = 6)

@@ -1,6 +1,7 @@
 
 import numpy as np, pandas as pd,  matplotlib as mpl, matplotlib.pyplot as plt,  os
-import itertools, functools;  from skimage import io as io,  transform as tfm
+import itertools, functools
+from skimage import io as io,  transform as tfm
 
 import torch, torch.nn as nn, torch.nn.functional as F,  torch.optim as optim
 import torchvision,  torchvision.transforms as T,  torchvision.utils as utils
@@ -9,14 +10,15 @@ from torch.nn import InstanceNorm2d as InstanceNorm, BatchNorm2d as BatchNorm
 from torch.utils.tensorboard import SummaryWriter,  FileWriter,  RecordWriter
 from torch.utils.data import Dataset, DataLoader, ConcatDataset, TensorDataset
 
-mpl.rcParams["figure.figsize"] = (8, 4); mpl.rcParams["axes.grid"] = False
+mpl.rcParams["figure.figsize"] = (8, 4)
+mpl.rcParams["axes.grid"] = False
 
 
 ##########################################################################################################################
 
 # Use GPU if available
 if torch.cuda.is_available():
-    devices = ['cuda:' + str(x) for x in range(torch.cuda.device_count())]
+    devices = [f'cuda:{str(x)}' for x in range(torch.cuda.device_count())]
     print(f"Number of GPUs available: {len(devices)}")
 else:
     devices = [torch.device('cpu')]; print("GPU isn't available! :(")
@@ -159,19 +161,20 @@ class Normalize(object):
 class CustomDataset(Dataset):
     
     def __init__(self, path: str = None, transforms = None):
-        
+
         """
         Parameters:
             transforms: a list of Transformations (Data augmentation)
         """
         
-        super().__init__(); self.transforms = T.Compose(transforms)
-        
-        file_names_A = sorted(os.listdir(path + 'A/'), key = lambda x: int(x[: -4]))
-        self.file_names_A = [path + 'A/' + file_name for file_name in file_names_A]
-        
-        file_names_B = sorted(os.listdir(path + 'B/'), key = lambda x: int(x[: -4]))
-        self.file_names_B = [path + 'B/' + file_name for file_name in file_names_B]
+        super().__init__()
+        self.transforms = T.Compose(transforms)
+
+        file_names_A = sorted(os.listdir(f'{path}A/'), key = lambda x: int(x[: -4]))
+        self.file_names_A = [f'{path}A/' + file_name for file_name in file_names_A]
+
+        file_names_B = sorted(os.listdir(f'{path}B/'), key = lambda x: int(x[: -4]))
+        self.file_names_B = [f'{path}B/' + file_name for file_name in file_names_B]
         
         
     def __len__(self):
@@ -182,9 +185,7 @@ class CustomDataset(Dataset):
         
         A = io.imread(self.file_names_A[idx % len(self.file_names_A)])
         B = io.imread(self.file_names_B[idx % len(self.file_names_B)])
-        sample = self.transforms({'A': A, 'B': B})
-        
-        return sample
+        return self.transforms({'A': A, 'B': B})
 
 
 class Helper(object):
@@ -225,9 +226,9 @@ class Helper(object):
 # 1) Correctly specify the Root directory which contains two folders: Train folder and Validation folder
 # 2) Image names should be labeled from 1 to len(dataset), o/w will throw an error while sorting the filenames
 
-root_dir = "./Dataset/Vision/CycleGAN/Cezzane/"; 
-trn_path = root_dir + "Trn/"
-val_path = root_dir + "Val/"
+root_dir = "./Dataset/Vision/CycleGAN/Cezzane/";
+trn_path = f"{root_dir}Trn/"
+val_path = f"{root_dir}Val/"
 
 trn_batch_sz = 1 * len(devices)
 val_batch_sz = 64
@@ -247,16 +248,20 @@ nb_val_iters = len(val_dataloader)
 helper = Helper()
 print(f"Length of Training dataset: {len(trn_dataset)}, Validation dataset: {len(val_dataset)}")
 
-print(f"Few random samples from the Training dataset!")
+print("Few random samples from the Training dataset!")
 sample = helper.get_random_sample(trn_dataset)
-plt.subplot(1, 2, 1); helper.show_image(sample['A'])
-plt.subplot(1, 2, 2); helper.show_image(sample['B'])
+plt.subplot(1, 2, 1)
+helper.show_image(sample['A'])
+plt.subplot(1, 2, 2)
+helper.show_image(sample['B'])
 plt.show()
 
-print(f"Few random samples from the Validation dataset!")
+print("Few random samples from the Validation dataset!")
 sample = helper.get_random_sample(val_dataset)
-plt.subplot(1, 2, 1); helper.show_image(sample['A'])
-plt.subplot(1, 2, 2); helper.show_image(sample['B'])
+plt.subplot(1, 2, 1)
+helper.show_image(sample['A'])
+plt.subplot(1, 2, 2)
+helper.show_image(sample['B'])
 plt.show()
 
 
@@ -299,7 +304,7 @@ class ResBlock(nn.Module):
 class Generator(nn.Module):
     
     def __init__(self, in_channels: int = 3, out_channels: int = 64, apply_dp: bool = True):
-        
+
         """
                                 Generator Architecture (Image Size: 256)
         c7s1-64, d128, d256, R256, R256, R256, R256, R256, R256, R256, R256, R256, u128, u64, c7s1-3, 
@@ -316,33 +321,33 @@ class Generator(nn.Module):
             out_channels: Number of output channels
             apply_dp:     If apply_dp is set to True, then activations are 0'ed out with prob 0.5
         """
-        
+
         super().__init__()
-        
+
         f = 1
         nb_downsampling = 2
         nb_resblks = 6 if img_sz == 128 else 9 
-        
+
         conv = nn.Conv2d(in_channels = in_channels, out_channels = out_channels, kernel_size = 7, stride = 1)
         self.layers = [nn.ReflectionPad2d(3), conv, nn.InstanceNorm2d(out_channels), nn.ReLU(True)]
-        
-        for i in range(nb_downsampling):
+
+        for _ in range(nb_downsampling):
             conv = nn.Conv2d(out_channels * f, out_channels * 2 * f, kernel_size = 3, stride = 2, padding = 1)
             self.layers += [conv, nn.InstanceNorm2d(out_channels * 2 * f), nn.ReLU(True)]
             f *= 2
-        
-        for i in range(nb_resblks):
+
+        for _ in range(nb_resblks):
             res_blk = ResBlock(in_channels = out_channels * f, apply_dp = apply_dp)
             self.layers += [res_blk]
-        
-        for i in range(nb_downsampling):
+
+        for _ in range(nb_downsampling):
             conv = nn.ConvTranspose2d(out_channels * f, out_channels * (f//2), 3, 2, padding = 1, output_padding = 1)
             self.layers += [conv, nn.InstanceNorm2d(out_channels * (f//2)), nn.ReLU(True)]
             f = f // 2
-        
+
         conv = nn.Conv2d(in_channels = out_channels, out_channels = in_channels, kernel_size = 7, stride = 1)
         self.layers += [nn.ReflectionPad2d(3), conv, nn.Tanh()]
-        
+
         self.net = nn.Sequential(*self.layers)
     
     
@@ -353,7 +358,7 @@ class Generator(nn.Module):
 class Discriminator(nn.Module):
     
     def __init__(self, in_channels: int = 3, out_channels: int = 64, nb_layers: int = 3):
-        
+
         """
                                     Discriminator Architecture!
         C64 - C128 - C256 - C512, where Ck denote a Convolution-InstanceNorm-LeakyReLU layer with k filters
@@ -365,28 +370,28 @@ class Discriminator(nn.Module):
             out_channels:   Number of output channels
             nb_layers:      Number of layers in the 70*70 Patch Discriminator
         """
-        
+
         super().__init__()
-        
+
         in_f  = 1
         out_f = 2
-        
+
         conv = nn.Conv2d(in_channels, out_channels, kernel_size = 4, stride = 2, padding = 1)
         self.layers = [conv, nn.LeakyReLU(0.2, True)]
-        
-        for idx in range(1, nb_layers):
+
+        for _ in range(1, nb_layers):
             conv = nn.Conv2d(out_channels * in_f, out_channels * out_f, kernel_size = 4, stride = 2, padding = 1)
             self.layers += [conv, nn.InstanceNorm2d(out_channels * out_f), nn.LeakyReLU(0.2, True)]
             in_f   = out_f
             out_f *= 2
-        
+
         out_f = min(2 ** nb_layers, 8)
         conv = nn.Conv2d(out_channels * in_f,  out_channels * out_f, kernel_size = 4, stride = 1, padding = 1)
         self.layers += [conv, nn.InstanceNorm2d(out_channels * out_f), nn.LeakyReLU(0.2, True)]      
-        
+
         conv = nn.Conv2d(out_channels * out_f, out_channels = 1, kernel_size = 4, stride = 1, padding = 1)
         self.layers += [conv]
-        
+
         self.net = nn.Sequential(*self.layers)
         
         
@@ -523,7 +528,7 @@ class Loss:
         
     
     def get_dis_gan_loss(self, dis_pred_real_data, dis_pred_fake_data):
-        
+
         """
         Parameters:
             dis_pred_real_data: Discriminator's prediction on real data
@@ -532,30 +537,26 @@ class Loss:
         
         dis_tar_real_data = torch.ones_like (dis_pred_real_data, requires_grad = False)
         dis_tar_fake_data = torch.zeros_like(dis_pred_fake_data, requires_grad = False)
-        
+
         loss_real_data = self.loss(dis_pred_real_data, dis_tar_real_data)
         loss_fake_data = self.loss(dis_pred_fake_data, dis_tar_fake_data)
-        
-        dis_tot_loss = (loss_real_data + loss_fake_data) * 0.5
-        
-        return dis_tot_loss
+
+        return (loss_real_data + loss_fake_data) * 0.5
     
     
     def get_gen_gan_loss(self, dis_pred_fake_data):
-        
+
         """
         Parameters:
             dis_pred_fake_data: Discriminator's prediction on fake data
         """
         
         gen_tar_fake_data = torch.ones_like(dis_pred_fake_data, requires_grad = False)
-        gen_tot_loss = self.loss(dis_pred_fake_data, gen_tar_fake_data)
-        
-        return gen_tot_loss
+        return self.loss(dis_pred_fake_data, gen_tar_fake_data)
     
     
     def get_gen_cyc_loss(self, real_data, cyc_data):
-        
+
         """
         Parameters:
             real_data: Real images sampled from the dataloaders
@@ -564,13 +565,11 @@ class Loss:
         """
         
         gen_cyc_loss = torch.nn.L1Loss()(real_data, cyc_data)
-        gen_tot_loss = gen_cyc_loss * self.lambda_
-        
-        return gen_tot_loss
+        return gen_cyc_loss * self.lambda_
     
     
     def get_gen_idt_loss(self, real_data, idt_data):
-        
+
         """
         Implements the identity loss: 
             nn.L1Loss(LG_B2A(real_A), real_A) 
@@ -578,9 +577,7 @@ class Loss:
         """
         
         gen_idt_loss = torch.nn.L1Loss()(real_data, idt_data)
-        gen_tot_loss = gen_idt_loss * self.lambda_ * 0.5
-        
-        return gen_tot_loss
+        return gen_idt_loss * self.lambda_ * 0.5
 
 
 
@@ -604,7 +601,7 @@ class ImagePool:
         
     
     def push_and_pop(self, images):
-        
+
         """
         Parameters:
             images: latest images generated by the generator
@@ -615,21 +612,20 @@ class ImagePool:
         images_to_return = []
         for image in images:
             image = torch.unsqueeze(image, 0)
-            
-            if  self.nb_images < self.pool_sz:
+
+            if self.nb_images < self.pool_sz:
                 self.image_pool.append (image) 
                 images_to_return.append(image)
                 self.nb_images += 1
+            elif np.random.uniform(0, 1) > 0.5:
+
+                rand_int = np.random.randint(0, self.pool_sz)
+                temp_img = self.image_pool[rand_int].clone()
+                self.image_pool[rand_int] = image
+                images_to_return.append(temp_img)
             else:
-                if np.random.uniform(0, 1) > 0.5:
-                    
-                    rand_int = np.random.randint(0, self.pool_sz)
-                    temp_img = self.image_pool[rand_int].clone()
-                    self.image_pool[rand_int] = image
-                    images_to_return.append(temp_img)   
-                else:
-                    images_to_return.append(image)
-        
+                images_to_return.append(image)
+
         return torch.cat(images_to_return, 0)
 
 
@@ -661,13 +657,14 @@ class CycleGAN:
     
     def __init__(self, root_dir: str, g_A2B, g_B2A, d_A, d_B):
         
-        self.save_dir = root_dir + 'Models/'
-        summary_path = root_dir + 'Tensorboard/'
-        
+        self.save_dir = f'{root_dir}Models/'
+        summary_path = f'{root_dir}Tensorboard/'
+
         if not os.path.exists(self.save_dir): os.makedirs(self.save_dir)
         if not os.path.exists(summary_path ): os.makedirs(summary_path )
-        self.saver = SaveModel(self.save_dir); self.tb = Tensorboard(summary_path)
-        
+        self.saver = SaveModel(self.save_dir)
+        self.tb = Tensorboard(summary_path)
+
         self.d_A = d_A
         self.d_B = d_B
         self.g_A2B = g_A2B
@@ -824,28 +821,27 @@ class CycleGAN:
     def eval_(self, model_name: str = None):
         
         _ = self.load_state_dict(path = self.save_dir + model_name, train = False) 
-        
+
         list_real_A = []
         list_fake_A = []
         list_real_B = []
         list_fake_B = []
-        
-        for idx, data in enumerate(val_dataloader):
-            
+
+        for data in val_dataloader:
             real_A, real_B = data['A'].to(devices[0]), data['B'].to(devices[0])
             fake_A = self.g_B2A(real_B).detach()
             fake_B = self.g_A2B(real_A).detach()
-            
+
             list_real_A.append(real_A)
             list_real_B.append(real_B)
             list_fake_A.append(fake_A)
             list_fake_B.append(fake_B)
-        
+
         real_A = torch.cat(list_real_A, axis = 0)
         fake_A = torch.cat(list_fake_A, axis = 0)
         real_B = torch.cat(list_real_B, axis = 0)
         fake_B = torch.cat(list_fake_B, axis = 0)
-        
+
         return real_A, real_B, fake_A, fake_B
 
 
@@ -860,6 +856,9 @@ root_dir = "./Results/CycleGAN/Cezzane/"
 model = CycleGAN(root_dir = root_dir, g_A2B = g_A2B, g_B2A = g_B2A, d_A = d_A, d_B = d_B)
 
 if is_train: model.fit(nb_epochs = nb_epochs, model_name = None, epoch_decay = epoch_decay)
-else: real_A, real_B, fake_A, fake_B = model.eval_(model_name = "Model_" + str(nb_epochs) + ".pth")
+else:else
+    real_A, real_B, fake_A, fake_B = model.eval_(
+        model_name=f"Model_{nb_epochs}.pth"
+    )
 
 ##########################################################################################################################
